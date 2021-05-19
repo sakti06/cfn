@@ -1,0 +1,89 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - t2.small
+    Description: Enter t2.micro, t2.small. Default is t2.micro.
+  AMI:
+    Type: String
+    Default: ami-010aff33ed5991201
+    Description: The Windows AMI to use.
+  Subnets:
+    Description: Choose which subnets for the Application Load Balancer 
+    Type: List<AWS::EC2::Subnet::Id>
+  AZ:
+   Type: String
+   Description: AZ for instance
+  Key:
+    Description: The key used to access the instance.
+    Type: AWS::EC2::KeyPair::KeyName
+  SSHLocation:
+   Type: String
+   Description: Ssh location for ec2 instance
+   Default: 0.0.0.0/0
+Resources:
+  Webserver:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId:
+        Ref: AMI
+      InstanceType:
+        Ref: InstanceType
+      KeyName: 
+        Ref : Key
+      AvailabilityZone:
+         Ref: AZ
+      SecurityGroupIds: [Ref: WebServerSG]
+      UserData: 
+        Fn::Base64: |
+          #!/bin/bash -xe
+          yum update -y 
+          yum install -y httpd 
+          systemctl start httpd
+          systemctl enable httpd
+          echo "Hello World" > /var/www/html/index.html
+
+  WebServerSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow http to client host
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp:
+         Ref: SSHLocation
+      VpcId: vpc-40495728
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      SecurityGroups: [Ref: WebServerSG]
+      Subnets:
+        Ref: Subnets
+  LoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn:
+       Ref: LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: 
+            Ref: TargetGroup
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: vpc-40495728
+      Port: 80
+      Protocol: HTTP
+      
+     
